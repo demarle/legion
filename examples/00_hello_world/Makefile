@@ -31,7 +31,33 @@ GEN_SRC		:= hello_world.cc		# .cc files
 GEN_GPU_SRC	:=				# .cu files
 
 # You can modify these variables, some will be appended to by the runtime makefile
-INC_FLAGS	:=
+
+#from: /Source/VTK/devel/VTK/Utilities/Maintenance/WhatModulesVTK.py /Source/VTK/devel/VTK /Source/LEGION/src/legion/examples/00_hello_world/hello_world.cc, add the src&bld to -I and libs to -L
+INC_FLAGS	:=\
+-I /Source/VTK/devel/VTK/Common/Core \
+-I /Source/VTK/devel/VTK/Common/DataModel \
+-I /Source/VTK/devel/VTK/Common/ExecutionModel \
+-I /Source/VTK/devel/VTK/Common/Math \
+-I /Source/VTK/devel/VTK/Common/Misc \
+-I /Source/VTK/devel/VTK/Common/System \
+-I /Source/VTK/devel/VTK/Common/Transforms \
+-I /Source/VTK/devel/VTK/Filters/Core \
+-I /Source/VTK/devel/VTK/Imaging/Core \
+-I /Source/VTK/devel/VTK/Rendering/Core \
+-I /Source/VTK/devel/VTK/Rendering/OpenGL \
+-I /Builds/VTK/devel/master/Common/Core \
+-I /Builds/VTK/devel/master/Common/DataModel \
+-I /Builds/VTK/devel/master/Common/ExecutionModel \
+-I /Builds/VTK/devel/master/Common/Math \
+-I /Builds/VTK/devel/master/Common/Misc \
+-I /Builds/VTK/devel/master/Common/System \
+-I /Builds/VTK/devel/master/Common/Transforms \
+-I /Builds/VTK/devel/master/Filters/Core \
+-I /Builds/VTK/devel/master/Imaging/Core \
+-I /Builds/VTK/devel/master/Rendering/Core \
+-I /Builds/VTK/devel/master/Rendering/OpenGL
+
+
 CC_FLAGS	:=
 NVCC_FLAGS	:=
 GASNET_FLAGS	:=
@@ -89,6 +115,19 @@ GEN_GPU_OBJS	:=
 GPU_RUNTIME_OBJS:=
 endif
 
+VTKLIBS := \
+/Builds/VTK/devel/master/lib/libvtkCommonCore.dylib \
+/Builds/VTK/devel/master/lib/libvtkCommonDataModel.dylib \
+/Builds/VTK/devel/master/lib/libvtkCommonExecutionModel.dylib \
+/Builds/VTK/devel/master/lib/libvtkCommonMath.dylib \
+/Builds/VTK/devel/master/lib/libvtkCommonMisc.dylib \
+/Builds/VTK/devel/master/lib/libvtkCommonSystem.dylib \
+/Builds/VTK/devel/master/lib/libvtkCommonTransforms.dylib \
+/Builds/VTK/devel/master/lib/libvtkFiltersCore.dylib \
+/Builds/VTK/devel/master/lib/libvtkImagingCore.dylib \
+/Builds/VTK/devel/master/lib/libvtkRenderingCore.dylib \
+/Builds/VTK/devel/master/lib/libvtkRenderingOpenGL.dylib
+
 ALL_OBJS	:= $(GEN_OBJS) $(GEN_GPU_OBJS) $(LOW_RUNTIME_OBJS) $(HIGH_RUNTIME_OBJS) $(GPU_RUNTIME_OBJS) $(MAPPER_OBJS)
 
 all:
@@ -98,7 +137,7 @@ all:
 $(OUTFILE) : $(ALL_OBJS)
 	@echo "---> Linking objects into one binary: $(OUTFILE)"
 ifdef SHARED_LOWLEVEL
-	$(GCC) -o $(OUTFILE) $(ALL_OBJS) $(LD_FLAGS) $(GASNET_FLAGS)
+	$(GCC) -o $(OUTFILE) $(ALL_OBJS) $(LD_FLAGS) $(GASNET_FLAGS) $(VTKLIBS)
 else
 	$(NVCC) -o $(OUTFILE) $(ALL_OBJS) $(LD_FLAGS) $(GASNET_FLAGS)
 endif

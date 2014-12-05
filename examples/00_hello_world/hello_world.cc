@@ -27,6 +27,19 @@ enum TaskID {
   HELLO_WORLD_ID,
 };
 
+#include <vtkAutoInit.h>
+VTK_MODULE_INIT(vtkRenderingOpenGL);
+
+#include <vtkActor.h>
+#include <vtkContourFilter.h>
+#include <vtkDataSetMapper.h>
+#include <vtkFloatArray.h>
+#include <vtkImageData.h>
+#include <vtkRenderer.h>
+#include <vtkRenderWindow.h>
+#include <vtkRTAnalyticSource.h>
+#include <vtkSmartPointer.h>
+
 // All single-launch tasks in Legion must have this signature with
 // the extension that they can have different return values.
 void hello_world_task(const Task *task, 
@@ -34,7 +47,67 @@ void hello_world_task(const Task *task,
                       Context ctx, HighLevelRuntime *runtime)
 {
   // A task runs just like a normal C++ function.
-  printf("Hello World!\n");
+  /*
+  std::cerr<< "Hello {" << std::endl;
+  vtkSmartPointer<vtkImageData> id = vtkSmartPointer<vtkImageData>::New();
+  id->PrintSelf(std::cerr, vtkIndent(7));
+  std::cerr << "}" << std::endl;
+  */
+  vtkSmartPointer<vtkRTAnalyticSource> idp = vtkSmartPointer<vtkRTAnalyticSource>::New();
+  vtkSmartPointer<vtkContourFilter> cf = vtkSmartPointer<vtkContourFilter>::New();
+  cf->SetInputConnection(idp->GetOutputPort());
+  cf->SetNumberOfContours(1);
+  cf->SetValue(0,125);
+  //cf->Update();
+  //cf->GetOutput()->PrintSelf(std::cerr, vtkIndent(0));
+  vtkSmartPointer<vtkDataSetMapper> m = vtkSmartPointer<vtkDataSetMapper>::New();
+  m->SetInputConnection(cf->GetOutputPort());
+  vtkSmartPointer<vtkActor> a = vtkSmartPointer<vtkActor>::New();
+  a->SetMapper(m);
+  vtkSmartPointer<vtkRenderer> r = vtkSmartPointer<vtkRenderer>::New();
+  r->AddActor(a);
+  vtkSmartPointer<vtkRenderWindow> rw = vtkSmartPointer<vtkRenderWindow>::New();
+  rw->AddRenderer(r);
+  rw->Render();
+  r->ResetCamera();
+  rw->Render();
+  //std::string s;
+  //cerr << "ANY KEY TO CONTINUE" << endl;
+  //cin >> s;
+  int *wh = rw->GetSize();
+  int w = wh[0];
+  int h = wh[1];
+  float *rgb = new float[w*h*4];
+  int slop = 150; //wtf?
+  float *z = new float[w*h+slop];
+
+  vtkSmartPointer<vtkFloatArray> fa = vtkSmartPointer<vtkFloatArray>::New();
+  fa->SetNumberOfComponents(4);
+  fa->SetNumberOfTuples(w*h);
+
+  bool legion_owns = true;
+  fa->SetVoidArray(rgb, w*h*4*sizeof(float), legion_owns);
+
+  rw->GetRGBAPixelData(0,0,w,h, 1, fa);
+
+  rw->GetZbufferData(0,0,w,h, z);
+
+
+  for (int hi = 0; hi < h; hi+=50)
+    {
+    for (int wi = 0; wi < w; wi+=50)
+      {
+      int pxoffset = (hi*w + wi);
+      cerr << rgb[pxoffset*4+0] << " "
+           << rgb[pxoffset*4+1] << " "
+           << rgb[pxoffset*4+2] << " "
+           << rgb[pxoffset*4+3] << " "
+           << z[pxoffset]
+           << " ";
+      }
+    cerr << endl;
+    }
+
 }
 
 // We have a main function just like a standard C++ program.
