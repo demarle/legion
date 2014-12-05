@@ -18,13 +18,23 @@
 
 #include "legion.h"
 
-// All of the important user-level objects live 
+// All of the important user-level objects live
 // in the high-level runtime namespace.
 using namespace LegionRuntime::HighLevel;
+using namespace LegionRuntime::Accessor;
 
 // We use an enum to declare the IDs for user-level tasks
 enum TaskID {
   HELLO_WORLD_ID,
+};
+
+enum FieldIDs {
+  FID_SCALAR,
+  FID_R,
+  FID_G,
+  FID_B,
+  FID_A,
+  FID_Z
 };
 
 #include <vtkAutoInit.h>
@@ -42,7 +52,7 @@ VTK_MODULE_INIT(vtkRenderingOpenGL);
 
 // All single-launch tasks in Legion must have this signature with
 // the extension that they can have different return values.
-void hello_world_task(const Task *task, 
+void hello_world_task(const Task *task,
                       const std::vector<PhysicalRegion> &regions,
                       Context ctx, HighLevelRuntime *runtime)
 {
@@ -53,6 +63,67 @@ void hello_world_task(const Task *task,
   id->PrintSelf(std::cerr, vtkIndent(7));
   std::cerr << "}" << std::endl;
   */
+
+#define ISz 10
+#define JSz 10
+#define KSz 10
+
+#if 0
+  float *s = new float(ISz*JSz*Ksz);
+#else
+  Rect<1> rect(Point<1>(0),Point<1>(ISz*JSz*KSz-1));
+  IndexSpace structured_is = runtime->create_index_space
+    (ctx,
+     Domain::from_rect<1>(rect));
+  FieldSpace fs = runtime->create_field_space(ctx);
+  FieldAllocator allocator = runtime->create_field_allocator(ctx, fs);
+  FieldID fida = allocator.allocate_field(sizeof(float), FID_SCALAR);
+  LogicalRegion structured_lr =
+    runtime->create_logical_region(ctx, structured_is, fs);
+
+  RegionRequirement req(structured_lr, READ_WRITE, EXCLUSIVE, structured_lr);
+  req.add_field(FID_SCALAR);
+  InlineLauncher input_launcher(req);
+  PhysicalRegion input_region = runtime->map_region(ctx, input_launcher);
+  input_region.wait_until_valid();
+
+  RegionAccessor<AccessorType::Generic, float> acc_x =
+    input_region.get_field_accessor(FID_SCALAR).typeify<float>();
+  //write some test data
+
+  int i = 0;
+  int j = 0;
+  int k = 0;
+  for (GenericPointInRectIterator<1> pir(rect); pir; pir++) 
+    {
+    k = k + 1;
+    if (k == KSz)
+      {
+      k = 0;
+      j = j + 1;
+      if (j == JSz)
+        {
+        j = 0;
+        i = i + 1;
+        }
+      }
+    acc_x.write(DomainPoint::from_point<1>(pir.p), i+j+k);
+  }
+  /*
+  Rect<1> subrect;
+  ByteOffset off(0); 
+  void *data = acc_x.raw_rect_ptr<1>(rect, subrect, &off);
+  cerr << ((float*)data)[1000] << endl;
+  */
+
+  //get raw pointer, is there a safer way? VTK will want raw pointers
+  Rect<1> subrect;
+  ByteOffset off(0); 
+  void *data = acc_x.raw_rect_ptr<1>(rect, subrect, &off);
+
+#endif
+
+
   vtkSmartPointer<vtkRTAnalyticSource> idp = vtkSmartPointer<vtkRTAnalyticSource>::New();
   vtkSmartPointer<vtkContourFilter> cf = vtkSmartPointer<vtkContourFilter>::New();
   cf->SetInputConnection(idp->GetOutputPort());
@@ -85,13 +156,11 @@ void hello_world_task(const Task *task,
   fa->SetNumberOfComponents(4);
   fa->SetNumberOfTuples(w*h);
 
-  bool legion_owns = true;
+  bool legion_owns = true; //then vtk won't free when it goes away
   fa->SetVoidArray(rgb, w*h*4*sizeof(float), legion_owns);
 
   rw->GetRGBAPixelData(0,0,w,h, 1, fa);
-
   rw->GetZbufferData(0,0,w,h, z);
-
 
   for (int hi = 0; hi < h; hi+=50)
     {
@@ -107,6 +176,10 @@ void hello_world_task(const Task *task,
       }
     cerr << endl;
     }
+
+  runtime->destroy_logical_region(ctx, structured_lr);
+  runtime->destroy_field_space(ctx, fs);
+  runtime->destroy_index_space(ctx, structured_is);
 
 }
 
@@ -130,7 +203,7 @@ int main(int argc, char **argv)
       Processor::LOC_PROC, true/*single*/, false/*index*/);
 
   // Now we're ready to start the runtime, so tell it to begin the
-  // execution.  We'll never return from this call, but its return 
+  // execution.  We'll never return from this call, but its return
   // signature will return an int to satisfy the type checker.
   return HighLevelRuntime::start(argc, argv);
 }
